@@ -3,7 +3,7 @@ import pytest
 from btborders.core import protocol as p
 
 SAMPLES = [
-    p.Hello(1, 1920, 1080),
+    p.Hello(1, 1920, 1080, 1),
     p.Move(-5, 300),
     p.Move(-32768, 32767),
     p.ButtonEvent(p.Button.RIGHT, True),
@@ -12,6 +12,7 @@ SAMPLES = [
     p.KeyEvent("char:a", True),
     p.KeyEvent("key:ctrl_l", False),
     p.KeyEvent("char:é", True),
+    p.KeyEvent("char:q", True, 81),
     p.Clipboard("héllo wörld ✓"),
     p.Clipboard(""),
     p.Switch(p.SwitchAction.ENTER, p.Edge.RIGHT, 0.25),

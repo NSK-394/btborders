@@ -4,8 +4,8 @@ Every packet is  <1 byte type> <payload>.  Payloads use fixed ``struct`` layouts
 mouse move is only 5 bytes (before encryption adds its 8-byte counter + 16-byte tag).
 
 Mouse deltas are *relative* (dx, dy) so differing screen resolutions do not matter.
-Keys are sent by *name* ("char:a", "key:ctrl_l", "vk:96") rather than by raw scancode, so
-the mapping does not depend on the sender's keyboard layout.
+Keys are sent by *name* ("char:a", "key:ctrl_l") so the mapping does not depend on the
+sender's keyboard layout; a raw vk code rides along for same-OS pairs (shortcuts need it).
 """
 
 from __future__ import annotations
@@ -68,6 +68,7 @@ class Hello:
     version: int
     width: int
     height: int
+    platform: int = 0  # 0=windows 1=linux 2=macos (decides whether raw vk codes are usable)
 
 
 @dataclass(frozen=True)
@@ -90,8 +91,9 @@ class Scroll:
 
 @dataclass(frozen=True)
 class KeyEvent:
-    name: str  # "char:a" | "key:ctrl_l" | "vk:96"
+    name: str  # layout-independent name: "char:a" | "key:ctrl_l"
     down: bool
+    vk: int | None = None  # raw virtual-key code; only used when both sides share an OS
 
 
 @dataclass(frozen=True)
@@ -121,7 +123,9 @@ class HeartbeatAck:
 Packet = (Hello | Move | ButtonEvent | Scroll | KeyEvent | Clipboard | Switch | Heartbeat
           | HeartbeatAck)
 
-_HELLO = struct.Struct("!BHH")
+_HELLO = struct.Struct("!BHHB")
+_KEY = struct.Struct("!BI")
+_NO_VK = 0xFFFFFFFF
 _XY = struct.Struct("!hh")
 _BTN = struct.Struct("!BB")
 _SWITCH = struct.Struct("!BBf")
@@ -131,7 +135,7 @@ _BEAT = struct.Struct("!Id")
 def encode(pkt: Packet) -> bytes:
     """Serialise a packet to bytes."""
     if isinstance(pkt, Hello):
-        return bytes([PacketType.HELLO]) + _HELLO.pack(pkt.version, pkt.width, pkt.height)
+        return bytes([PacketType.HELLO]) + _HELLO.pack(pkt.version, pkt.width, pkt.height, pkt.platform)
     if isinstance(pkt, Move):
         return bytes([PacketType.MOVE]) + _XY.pack(_i16(pkt.dx), _i16(pkt.dy))
     if isinstance(pkt, ButtonEvent):
@@ -142,7 +146,8 @@ def encode(pkt: Packet) -> bytes:
         name = pkt.name.encode("utf-8")
         if len(name) > 64:
             raise ProtocolError("key name too long")
-        return bytes([PacketType.KEY, int(pkt.down)]) + name
+        vk = _NO_VK if pkt.vk is None else pkt.vk & 0xFFFFFFFF
+        return bytes([PacketType.KEY]) + _KEY.pack(int(pkt.down), vk) + name
     if isinstance(pkt, Clipboard):
         data = pkt.text.encode("utf-8")
         if len(data) > MAX_CLIPBOARD_BYTES:
@@ -177,9 +182,11 @@ def decode(data: bytes) -> Packet:
         if ptype is PacketType.SCROLL:
             return Scroll(*_XY.unpack(body))
         if ptype is PacketType.KEY:
-            if len(body) < 2:
+            if len(body) < _KEY.size + 1:
                 raise ProtocolError("short key packet")
-            return KeyEvent(body[1:].decode("utf-8"), bool(body[0]))
+            down, vk = _KEY.unpack_from(body)
+            return KeyEvent(body[_KEY.size:].decode("utf-8"), bool(down),
+                            None if vk == _NO_VK else vk)
         if ptype is PacketType.CLIPBOARD:
             if len(body) > MAX_CLIPBOARD_BYTES:
                 raise ProtocolError("clipboard text exceeds cap")
