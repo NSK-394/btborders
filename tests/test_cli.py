@@ -72,3 +72,91 @@ def test_status_snapshot_and_file(tmp_path):
     assert snap["connected"] and snap["events_sent"] == 3 and "_lock" not in snap
     s.write(tmp_path / "s.json")
     assert json.loads((tmp_path / "s.json").read_text())["latency_ms"] == 1.5
+
+
+# ---- regression: `btb connect` / `btb serve` crashed in logging setup ("'stream' or 'filename'
+# should not be specified together with 'handlers'") on the default TUI path.
+import logging
+
+from btborders import cli as _cli
+
+
+def _bare_root():
+    """Empty the root logger NOW (pytest re-attaches its handlers when the test body starts,
+    and basicConfig() only validates its arguments when the root has no handlers)."""
+    logging.getLogger().handlers.clear()
+
+
+@pytest.fixture
+def fake_input(monkeypatch):
+    """Run the REAL serve/connect startup code, but with mock devices instead of OS hooks."""
+    from btborders import pynput_backend as pb
+    from btborders.input_backend import MockSink, MockSource
+    monkeypatch.setattr(pb, "PynputSource", lambda: MockSource())
+    monkeypatch.setattr(pb, "PynputSink", lambda: MockSink())
+    monkeypatch.setattr(pb, "prepare_process", lambda: None)
+    # pytest pre-installs root handlers, and basicConfig() only validates its arguments when the
+    # root logger has NONE - so start from a bare root, exactly like a real `btb` process.
+    root = logging.getLogger()
+    saved, level = list(root.handlers), root.level
+    root.handlers.clear()
+    yield
+    for h in list(root.handlers):
+        root.removeHandler(h)
+        h.close()
+    root.handlers.extend(saved)
+    root.setLevel(level)
+
+
+@pytest.mark.parametrize("cmd", ["connect", "serve"])
+@pytest.mark.parametrize("ui", [True, False])
+def test_serve_and_connect_startup_do_not_crash(cmd, ui, fake_input, capsys):
+    assert _cli.main(["pair", "--no-pick"]) == 0
+    _bare_root()
+    argv = [cmd, "--transport", "tcp", "--tcp-port", "0" if cmd == "serve" else "47991",
+            "--run-for", "0.6"]
+    if not ui:
+        argv.append("--no-ui")
+    assert _cli.main(argv) == 0
+    assert "bye" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("to_console", [True, False])
+def test_setup_logging_is_idempotent(to_console, fake_input):
+    _bare_root()
+    root = logging.getLogger()
+    before = len(root.handlers)
+    for _ in range(3):
+        _cli._setup_logging(verbose=True, to_console=to_console)
+    assert len(root.handlers) == before + 1  # replaced, never stacked
+    assert root.level == logging.DEBUG
+    kind = logging.StreamHandler if to_console else logging.FileHandler
+    assert isinstance(_cli._installed_handlers[0], kind)
+
+
+def test_connect_help_and_serve_help(capsys):
+    for cmd in ("connect", "serve"):
+        with pytest.raises(SystemExit) as e:
+            _cli.main([cmd, "--help"])
+        assert e.value.code == 0
+    assert "--run-for" not in capsys.readouterr().out  # hidden option stays hidden
+
+
+def test_ui_renders_on_legacy_codepage_console():
+    """Regression: '○' crashed the TUI when the console encoding was cp1252."""
+    import io
+    import threading
+    from rich.console import Console
+    from btborders.status import Status
+    from btborders.ui import run_ui
+
+    class Cp1252(io.TextIOWrapper):
+        pass
+
+    raw = io.BytesIO()
+    console = Console(file=Cp1252(raw, encoding="cp1252", errors="strict"), force_terminal=True)
+    stop = threading.Event()
+    threading.Timer(0.4, stop.set).start()
+    run_ui(Status(role="client"), stop, console=console)
+    console.file.flush()
+    assert b"waiting for peer" in raw.getvalue()

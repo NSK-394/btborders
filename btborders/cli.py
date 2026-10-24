@@ -35,6 +35,7 @@ def _add_link_options(p: argparse.ArgumentParser) -> None:
     g.add_argument("--edge", choices=sorted(cfgmod.EDGE_NAMES),
                    help="which side of the SENDER's screen the receiver is on")
     p.add_argument("--no-ui", action="store_true", help="plain log output instead of the TUI")
+    p.add_argument("--run-for", type=float, help=argparse.SUPPRESS)  # exit after N seconds (tests)
     p.add_argument("-v", "--verbose", action="store_true")
 
 
@@ -52,10 +53,37 @@ def _load_config(args) -> cfgmod.Config:
     return cfg
 
 
+_LOG_FORMAT = "%(asctime)s %(name)s: %(message)s"
+_installed_handlers: list[logging.Handler] = []
+
+
 def _setup_logging(verbose: bool, to_console: bool) -> None:
-    logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO,
-                        format="%(asctime)s %(name)s: %(message)s", stream=sys.stderr,
-                        handlers=None if to_console else [logging.NullHandler()])
+    """Configure the root logger. Idempotent: handlers we installed earlier are replaced, never
+    stacked, so calling serve/connect twice cannot duplicate log lines.
+
+    Handlers are built explicitly (never basicConfig(stream=..., handlers=...) - that
+    combination raises ValueError). With the TUI active, console output would corrupt the
+    display, so logs go to <config dir>/btb.log instead.
+    """
+    root = logging.getLogger()
+    for h in _installed_handlers:
+        root.removeHandler(h)
+        h.close()
+    _installed_handlers.clear()
+
+    if to_console:
+        handler: logging.Handler = logging.StreamHandler(sys.stderr)
+    else:
+        try:
+            path = cfgmod.config_dir() / "btb.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handler = logging.FileHandler(path, encoding="utf-8")
+        except OSError:
+            handler = logging.NullHandler()
+    handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    root.addHandler(handler)
+    _installed_handlers.append(handler)
+    root.setLevel(logging.DEBUG if verbose else logging.INFO)
 
 
 def _status_path(role: str):
@@ -170,6 +198,8 @@ def _run_engine(args, role: str) -> int:
             psk, stop, on_wait=lambda e, w: status.update(message=f"{e} - retry in {w:.1f}s"))
         cleanup = lambda: None  # noqa: E731
 
+    if args.run_for:
+        threading.Timer(args.run_for, stop.set).start()
     worker = threading.Thread(target=target, daemon=True, name="btb-engine")
     worker.start()
     persist = threading.Thread(target=_persist_status, args=(status, role, stop), daemon=True)

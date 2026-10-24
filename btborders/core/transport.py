@@ -147,7 +147,10 @@ class TCPLoopbackTransport(SocketTransport):
 
     @classmethod
     def connect(cls, host: str, port: int) -> "TCPLoopbackTransport":
-        s = socket.create_connection((host, port), timeout=5)
+        try:
+            s = socket.create_connection((host, port), timeout=5)
+        except OSError as exc:  # refused / unreachable: let dial_with_backoff retry
+            raise TransportClosed(f"cannot reach {host}:{port}: {exc}") from exc
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return cls(s, f"tcp:{host}:{port}")
 

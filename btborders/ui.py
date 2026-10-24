@@ -13,7 +13,17 @@ from rich.text import Text
 from .status import Status
 
 
-def render(status: Status, hotkey: str = "ctrl+alt+q") -> Panel:
+def _unicode_ok(console: Console) -> bool:
+    """Can this console's encoding show our symbols? (legacy Windows codepages cannot)"""
+    try:
+        "●○…".encode(console.encoding or "ascii")
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def render(status: Status, hotkey: str = "ctrl+alt+q", unicode_ok: bool = True) -> Panel:
+    on, off, dots = ("●", "○", "…") if unicode_ok else ("*", "o", "...")
     s = status.snapshot()
     sender = s["role"] == "server"
     table = Table.grid(padding=(0, 2))
@@ -21,8 +31,8 @@ def render(status: Status, hotkey: str = "ctrl+alt+q") -> Panel:
     table.add_column()
     table.add_row("Role", "Sender (owns the mouse + keyboard)" if sender
                   else "Receiver (input is injected here)")
-    table.add_row("Link", Text("● connected", style="green") if s["connected"]
-                  else Text("○ waiting for peer…", style="yellow"))
+    table.add_row("Link", Text(f"{on} connected", style="green") if s["connected"]
+                  else Text(f"{off} waiting for peer{dots}", style="yellow"))
     table.add_row("Peer", s["peer"] or "-")
     lat = s["latency_ms"]
     style = "green" if lat is not None and lat < 30 else "yellow"
@@ -41,6 +51,7 @@ def run_ui(status: Status, stop: threading.Event, hotkey: str = "ctrl+alt+q",
            console: Console | None = None) -> None:
     """Block, redrawing ~4x/second, until `stop` is set (or the user hits Ctrl+C)."""
     console = console or Console()
-    with Live(render(status, hotkey), console=console, refresh_per_second=4) as live:
+    uni = _unicode_ok(console)
+    with Live(render(status, hotkey, uni), console=console, refresh_per_second=4) as live:
         while not stop.wait(0.25):
-            live.update(render(status, hotkey))
+            live.update(render(status, hotkey, uni))

@@ -88,12 +88,20 @@ def run_loopback(live: bool = False, out: Callable[[str], None] = print) -> bool
             check("moves, click, keys, scroll arrived in order", _wait(
                 lambda: [e[0] for e in recorder.log if e[0] != "move"]
                 == ["button", "button", "key", "key", "scroll"]))
-            check("mouse deltas were coalesced", len(recorder.events("move")) < 21)
+            # A burst faster than 125 Hz (like a real 1000 Hz mouse) must be batched, with the
+            # exact total preserved. (Slow sweeps legitimately go out one packet per move.)
+            moves = recorder.events("move")
+            n0, (x0, y0) = len(moves), moves[-1][1:]
+            for _ in range(200):
+                source.hardware_move(1, 0)
+            check("1000 Hz-style burst was coalesced, total preserved", _wait(
+                lambda: recorder.events("move")[-1][1:] == (x0 + 200, y0))
+                and len(recorder.events("move")) - n0 < 100)
         else:
             time.sleep(0.3)
 
         # Receiver hits its entry edge going back -> control returns to the sender.
-        source.hardware_move(-400, 0)
+        source.hardware_move(-700, 0)
         check("pushing back over the receiver edge returns control",
               _wait(lambda: server.mode == "local" and not client.active))
         check("sender input restored", not source.suppressed)
