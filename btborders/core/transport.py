@@ -186,8 +186,9 @@ class SerialTransport(Transport):
 
         self.name = f"serial:{port}"
         try:
-            self._ser = serial.Serial(port, baud, timeout=0.1, write_timeout=5)
-        except (serial.SerialException, OSError) as exc:
+            # serial_for_url accepts plain port names AND URLs like loop:// (used by the tests)
+            self._ser = serial.serial_for_url(port, baud, timeout=0.1, write_timeout=5)
+        except (serial.SerialException, OSError, ValueError) as exc:
             raise TransportClosed(f"cannot open {port}: {exc}") from exc
 
     def _write(self, data: bytes) -> None:
@@ -277,9 +278,15 @@ def listen_rfcomm(channel: int) -> SocketAcceptor:
     if not BluetoothRFCOMMTransport.available():
         raise TransportError("this Python build has no Bluetooth RFCOMM support")
     s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-    # "" / 00:00:00:00:00:00 = any local adapter. Windows requires an explicit channel 1-30.
-    s.bind(("00:00:00:00:00:00", channel))
-    s.listen(1)
+    try:
+        # 00:00:00:00:00:00 = any local adapter. Windows requires an explicit channel 1-30.
+        s.bind(("00:00:00:00:00:00", channel))
+        s.listen(1)
+    except OSError as exc:
+        s.close()
+        raise TransportError(
+            f"cannot listen on RFCOMM channel {channel}: {exc}. Is Bluetooth turned on, is an "
+            "adapter present, and is the channel free?") from exc
     return SocketAcceptor(s, lambda c: BluetoothRFCOMMTransport(c, f"rfcomm:ch{channel}"),
                           f"rfcomm channel {channel}")
 
