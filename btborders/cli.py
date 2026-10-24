@@ -193,7 +193,7 @@ def _run_engine(args, role: str) -> int:
     else:
         from .client import Client
         engine = Client(pb.PynputSink(), cfg, clipboard, status)
-        status.update(message=f"dialling {cfg.peer_mac or cfg.serial_port or cfg.tcp_host}…")
+        status.update(message=f"dialling {cfg.peer_mac or cfg.serial_port or cfg.tcp_host}...")
         target = lambda: engine.run_forever(  # noqa: E731
             psk, stop, on_wait=lambda e, w: status.update(message=f"{e} - retry in {w:.1f}s"))
         cleanup = lambda: None  # noqa: E731
@@ -270,7 +270,7 @@ def cmd_status(args) -> int:
 def cmd_loopback(args) -> int:
     from .selftest import run_loopback
     if args.live:
-        print("LIVE mode: your real cursor will be moved a few hundred pixels. Starting in 2s…")
+        print("LIVE mode: your real cursor will be moved a few hundred pixels. Starting in 2s...")
         time.sleep(2)
     return 0 if run_loopback(live=args.live) else 1
 
