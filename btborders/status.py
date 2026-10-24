@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 
@@ -34,9 +34,8 @@ class Status:
 
     def snapshot(self) -> dict:
         with self._lock:
-            d = asdict(self)
-        d.pop("_lock", None)
-        return d
+            # not asdict(): it would try to deep-copy the lock
+            return {f.name: getattr(self, f.name) for f in fields(self) if f.name != "_lock"}
 
     def write(self, path: Path) -> None:
         try:

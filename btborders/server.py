@@ -145,7 +145,7 @@ class Server:
             self._last_rx = self.clock()
             self.status.bump("events_received")
             if isinstance(pkt, pr.HeartbeatAck):
-                rtt = (self.clock() - pkt.ts) * 1000.0
+                rtt = (time.perf_counter() - pkt.ts) * 1000.0  # perf_counter: monotonic() is ~15 ms coarse on Windows
                 prev = self.status.latency_ms
                 self.status.update(latency_ms=rtt if prev is None else prev * 0.8 + rtt * 0.2)
             elif isinstance(pkt, pr.Switch) and pkt.action is pr.SwitchAction.LEAVE:
@@ -170,7 +170,7 @@ class Server:
                     self._queue_moves()
                 now = self.clock()
                 if now >= next_beat:
-                    channel.send(pr.Heartbeat(seq, now))
+                    channel.send(pr.Heartbeat(seq, time.perf_counter()))
                     seq += 1
                     next_beat = now + self.hb_interval
         except TransportError as exc:
