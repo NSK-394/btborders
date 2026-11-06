@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        run: uv sync
+
+      # Hardware notes:
+      # * No test uses real Bluetooth. End-to-end tests run Server and Client over the
+      #   TCP loopback transport with mock input devices; nothing is captured or injected.
+      # * tests/test_pynput_backend.py needs pynput (and on Linux an X display). On the
+      #   headless Ubuntu runner, pynput cannot load its X11 backend, so those tests skip
+      #   themselves (pytest.importorskip / "no display"). One test is Windows-only.
+      # * -rs prints every skipped test and its reason in the log.
+      - name: Test
+        run: uv run pytest -rs
