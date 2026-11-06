@@ -1,7 +1,28 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+# Build output (PyInstaller)
 dist/
 build/
 *.spec
+
+# Secrets and local config: never commit these
+config.toml
+pairing.key
+*.key
+*.pem
+.env
+.env.*
+
+# Logs
+*.log
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
