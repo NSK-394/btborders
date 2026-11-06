@@ -1,9 +1,26 @@
 [project]
 name = "btborders"
 version = "0.1.0"
-description = "Share one mouse and keyboard between two computers over Bluetooth (Mouse-without-Borders style)"
+description = "Share one mouse and keyboard between two computers over Bluetooth. Encrypted pairing, no Wi-Fi needed."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "K Nikhil Sai" }]
+keywords = ["bluetooth", "rfcomm", "kvm", "mouse", "keyboard", "aes-gcm", "input-sharing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Hardware",
+    "Topic :: Utilities",
+]
 dependencies = [
     "pynput>=1.7.7",
     "cryptography>=42",
@@ -17,6 +34,11 @@ qr = ["qrcode>=7"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pyinstaller>=6"]
+
+[project.urls]
+Homepage = "https://github.com/NSK-394/btborders"
+Repository = "https://github.com/NSK-394/btborders"
+Issues = "https://github.com/NSK-394/btborders/issues"
 
 [project.scripts]
 btb = "btborders.cli:main"
