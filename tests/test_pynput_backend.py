@@ -4,7 +4,9 @@ import sys
 
 import pytest
 
-pynput = pytest.importorskip("pynput")
+# exc_type=ImportError: on a headless Linux box (CI) pynput is installed but raises a plain
+# ImportError because it cannot reach an X display; skip instead of failing collection.
+pynput = pytest.importorskip("pynput", exc_type=ImportError)
 from pynput import keyboard  # noqa: E402
 
 from btborders import pynput_backend as pb  # noqa: E402
