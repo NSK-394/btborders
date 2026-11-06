@@ -9,6 +9,7 @@ PyInstaller does **not** cross-compile: build on Windows for Windows, on Linux f
 uv sync                      # installs deps + pyinstaller (dev group)
 uv run pyinstaller --onefile --name btb --collect-submodules pynput btb_entry.py --noconfirm
 .\dist\btb.exe test-loopback # sanity check the frozen build (should end with ALL CHECKS PASSED)
+Get-FileHash .\dist\btb.exe -Algorithm SHA256   # compare with the checksum in the release notes
 ```
 
 ## Linux
