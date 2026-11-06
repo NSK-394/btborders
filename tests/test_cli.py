@@ -58,6 +58,8 @@ def test_status_runs_without_instance(capsys):
 
 
 def test_serve_without_key_fails_cleanly(capsys):
+    # serve imports the pynput backend before checking the key; skip where pynput can't load.
+    pytest.importorskip("btborders.pynput_backend", exc_type=ImportError)
     assert cli.main(["serve", "--no-ui"]) == 2
     assert "pairing key" in capsys.readouterr().err
 
@@ -90,7 +92,8 @@ def _bare_root():
 @pytest.fixture
 def fake_input(monkeypatch):
     """Run the REAL serve/connect startup code, but with mock devices instead of OS hooks."""
-    from btborders import pynput_backend as pb
+    # pynput_backend imports pynput, which raises ImportError without an X display (headless CI).
+    pb = pytest.importorskip("btborders.pynput_backend", exc_type=ImportError)
     from btborders.input_backend import MockSink, MockSource
     monkeypatch.setattr(pb, "PynputSource", lambda: MockSource())
     monkeypatch.setattr(pb, "PynputSink", lambda: MockSink())
